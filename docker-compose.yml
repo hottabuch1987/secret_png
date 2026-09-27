@@ -1,0 +1,139 @@
+services:
+
+  db:
+    image: postgres:14.1-alpine
+    container_name: db
+    env_file: .env.docker
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - app-network
+
+  app:
+    build: ./backend/src
+    container_name: app
+    env_file:
+      - .env.docker
+    ports:
+      - 8000:8000
+    volumes:
+      - ./backend/src/:/usr/src/app/
+      - static_volume:/usr/src/app/static  
+      - media_volume:/usr/src/app/media   
+    depends_on:
+      - db
+
+    restart: always   
+    networks:
+      - app-network  
+  
+  front:
+    build:
+      context: ./frontend/src
+      dockerfile: Dockerfile
+    container_name: front
+    env_file:
+      - .env.docker
+    restart: always
+    networks:
+      - app-network
+    depends_on:
+      - app
+  
+  redis:
+    image: redis:6-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: redis-commander
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8081:8081"
+    networks:
+      - app-network
+
+  celery:
+    build: ./backend/src
+    container_name: celery
+    env_file: 
+      - .env.docker
+    depends_on:
+      - db
+      - redis
+    entrypoint: ""
+    command: celery -A celery_app worker -l INFO --concurrency=4
+    volumes:
+      - ./backend/src/:/usr/src/app/
+    restart: always
+    networks:
+      - app-network
+    
+  celery-beat:
+    build: ./backend/src
+    container_name: celery-beat
+    env_file: 
+      - .env.docker
+    depends_on:
+      - db
+      - redis
+      - celery
+    entrypoint: ""
+    command: celery -A config beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend/src/:/usr/src/app/
+    restart: always
+    networks:
+      - app-network
+
+  flower:
+    build: ./backend/src
+    container_name: flower
+    env_file: .env.docker
+    depends_on:
+      - redis
+      - celery
+    
+    entrypoint: ""
+    command: celery -A celery_app flower --address=0.0.0.0 --port=5555
+    environment:
+      - REDIS_HOST=redis
+      - IN_DOCKER=true
+    ports:
+      - "5555:5555" 
+    volumes:
+      - ./backend/src/:/usr/src/app/
+    restart: always
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:1.21.6-alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_volume:/usr/src/app/static
+      - media_volume:/usr/src/app/media
+    restart: always
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

@@ -1,6 +1,7 @@
 [![Typing SVG](https://readme-typing-svg.herokuapp.com?color=%2336BCF7&lines=quick+start )](https://git.io/typing-svg)
 
-## Документация по развертыванию  проекта 
+## Документация по развертыванию  проекта для скрытия текста в картинку png
+## Стек: DRF + Celery + Redis + PostgreSQL + Docker + WebSocket + Nuxt
 
 ### C помощью docker
 
@@ -110,8 +111,7 @@
    ```
    ```
    npm run dev
-   ```ls
+   ```
 ### После успешного запуска, приложение будет доступно по адресу:
-   - Nuxt: http://localhost:3000# new_project_26
-# drf_nuxt
-# secret_png
+   - Nuxt: http://localhost:3000
+

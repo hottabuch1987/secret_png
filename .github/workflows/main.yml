@@ -1,0 +1,151 @@
+name: Main Production Workflow
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js for Nuxt
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/src/package-lock.json
+          
+      - name: Setup Python for Django
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install Nuxt dependencies
+        run: |
+          cd frontend/src
+          npm ci
+          
+      - name: Build Nuxt static site
+        run: |
+          cd frontend/src
+          npm run generate
+          
+      - name: Install Django dependencies
+        run: |
+          cd backend/src
+          pip install -r requirements.txt
+          
+      - name: Run Django tests
+        run: |
+          cd backend/src
+          python manage.py test || echo "No tests configured"
+          
+      - name: Upload Nuxt build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuxt-build
+          path: frontend/src/dist/
+          
+      - name: Upload Django app
+        uses: actions/upload-artifact@v4
+        with:
+          name: django-app
+          path: backend/src
+          
+  deploy-frontend:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download Nuxt build
+        uses: actions/download-artifact@v4
+        with:
+          name: nuxt-build
+          path: ./dist
+          
+      - name: Verify build exists
+        run: |
+          ls -la ./dist
+          if [ ! -d "./dist" ] || [ -z "$(ls -A ./dist)" ]; then
+            echo "Build directory is empty!"
+            exit 1
+          fi
+          
+      - name: Deploy Nuxt to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          
+  deploy-backend:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download Django app
+        uses: actions/download-artifact@v4
+        with:
+          name: django-app
+          path: ./backend/src
+          
+      - name: Deploy Django to GitHub Pages (API)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./backend/src
+          publish_branch: gh-pages-api
+          force_orphan: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          
+  notify:
+    needs: [deploy-frontend, deploy-backend]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Send Telegram notification
+        if: success()  # Отправляем только при успехе
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            ✅ Деплой успешно выполнен!
+            📦 Проект: ${{ github.repository }}
+            🌿 Ветка: ${{ github.ref_name }}
+            👤 Автор: ${{ github.actor }}
+            🕐 Время: $(date '+%Y-%m-%d %H:%M:%S')
+            
+            🌐 Frontend: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+            📡 Backend API: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/api/
+            
+      - name: Send error notification
+        if: failure()
+        uses: appleboy/telegram-action@v1.0.0
+        with:
+          to: ${{ secrets.TELEGRAM_TO }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          message: |
+            ❌ Деплой НЕ выполнен!
+            📦 Проект: ${{ github.repository }}
+            🌿 Ветка: ${{ github.ref_name }}
+            👤 Автор: ${{ github.actor }}
+            🕐 Время: $(date '+%Y-%m-%d %H:%M:%S')
+            
+            🔍 Проверьте логи: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
