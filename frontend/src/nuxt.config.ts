@@ -18,10 +18,11 @@ export default defineNuxtConfig({
 
   // 👇 Добавляем проксирование media-файлов на Django
   nitro: {
-    devProxy: {
-      '/media': {
-        target: 'http://127.0.0.1:8000/media',
-        changeOrigin: true
+        routeRules: {
+      '/media/**': {
+        proxy: process.env.NODE_ENV === 'production'
+          ? 'http://app:8000/media/**'
+          : 'http://127.0.0.1:8000/media/**'
       }
     }
   }

@@ -100,26 +100,34 @@ const photos = ref([])
 const uploading = ref(false)
 const fileInput = ref(null)
 
-// ✅ Получение URL фото
+// ✅ ИСПРАВЛЕНО: убран apiBase для медиа, медиа всегда в корне /media/...
 const getPhotoUrl = (photo) => {
   if (!photo) return '/default-avatar.png'
-  
+
+  // Приоритет: image_url с бэкенда
   if (photo.image_url) {
+    // Если бэкенд вернул абсолютный URL с localhost:8000 / 127.0.0.1:8000 — убираем хост
+    if (/https?:\/\/(127\.0\.0\.1|localhost):8000/.test(photo.image_url)) {
+      return photo.image_url.replace(/https?:\/\/(127\.0\.0\.1|localhost):8000/, '')
+    }
     return photo.image_url
   }
-  
+
   if (photo.image) {
+    // Если это уже абсолютный URL
     if (photo.image.startsWith('http')) {
-      return photo.image
+      return photo.image.replace(/https?:\/\/(127\.0\.0\.1|localhost):8000/, '')
     }
-    return `${apiBase}${photo.image}`
+    // ✅ Медиа всегда в корне: /media/...
+    return photo.image
   }
-  
+
   return '/default-avatar.png'
 }
 
-// ✅ Обработка ошибки загрузки изображения
+// ✅ ИСПРАВЛЕНО: защита от бесконечного цикла
 const handleImageError = (event) => {
+  event.target.onerror = null
   event.target.src = '/default-avatar.png'
 }
 
@@ -130,7 +138,7 @@ const getAuthAxios = () => {
     console.error('❌ Нет токена авторизации')
     return axios
   }
-  
+
   return axios.create({
     headers: {
       'Authorization': `Token ${token}`,
@@ -144,7 +152,7 @@ const loadPhotos = async () => {
   try {
     const authAxios = getAuthAxios()
     const response = await authAxios.get(`${apiBase}/photos/`)
-    
+
     if (Array.isArray(response.data)) {
       photos.value = response.data
     } else if (response.data && typeof response.data === 'object') {
@@ -156,12 +164,12 @@ const loadPhotos = async () => {
     } else {
       photos.value = []
     }
-    
+
     const avatarPhoto = photos.value.find(p => p.is_avatar)
     if (avatarPhoto) {
       userStore.user.avatar = getPhotoUrl(avatarPhoto)
     }
-    
+
     console.log('📸 Загружено фото:', photos.value.length)
   } catch (error) {
     console.error('Error loading photos:', error)
@@ -207,19 +215,19 @@ const handleFileUpload = async (event) => {
         'Authorization': `Token ${token}`
       },
     })
-    
+
     if (!Array.isArray(photos.value)) {
       photos.value = []
     }
-    
+
     photos.value.unshift(response.data)
     toastStore.showToast(5000, 'Фото успешно загружено', 'bg-green-500/20')
-    
+
     if (photos.value.length === 1) {
       await userStore.fetchUserInfo()
       userStore.user.avatar = getPhotoUrl(response.data)
     }
-    
+
     console.log('✅ Фото загружено:', response.data)
   } catch (error) {
     console.error('Upload error:', error)
@@ -237,28 +245,28 @@ const setAvatar = async (photoId) => {
   try {
     const token = userStore.user.token
     console.log('🔄 Установка аватара для фото:', photoId)
-    
+
     await axios.post(`${apiBase}/photos/${photoId}/set_avatar/`, {}, {
       headers: {
         'Authorization': `Token ${token}`
       }
     })
-    
+
     if (!Array.isArray(photos.value)) {
       photos.value = []
       return
     }
-    
+
     photos.value = photos.value.map(photo => ({
       ...photo,
       is_avatar: photo.id === photoId
     }))
-    
+
     const avatarPhoto = photos.value.find(p => p.is_avatar)
     if (avatarPhoto) {
       userStore.user.avatar = getPhotoUrl(avatarPhoto)
     }
-    
+
     await userStore.fetchUserInfo()
     toastStore.showToast(5000, 'Главное фото обновлено', 'bg-green-500/20')
     console.log('✅ Аватар обновлен')
@@ -268,12 +276,12 @@ const setAvatar = async (photoId) => {
   }
 }
 
-// ✅ ИСПРАВЛЕНО: Удаление фото с явной передачей токена
+// Удаление фото
 const deletePhoto = async (photoId) => {
   if (!confirm('Вы уверены, что хотите удалить это фото?')) return
 
   const token = userStore.user.token
-  
+
   if (!token) {
     toastStore.showToast(5000, 'Ошибка авторизации', 'bg-red-500/20')
     return
@@ -281,8 +289,6 @@ const deletePhoto = async (photoId) => {
 
   const url = `${apiBase}/photos/${photoId}/`
   console.log('🗑️ Удаление фото:', photoId)
-  console.log('📡 URL запроса:', url)
-  console.log('🔑 Токен:', token ? 'Есть' : 'Нет')
 
   try {
     const response = await axios.delete(url, {
@@ -290,33 +296,29 @@ const deletePhoto = async (photoId) => {
         'Authorization': `Token ${token}`
       }
     })
-    
+
     console.log('✅ Ответ сервера:', response.data)
-    
+
     if (!Array.isArray(photos.value)) {
       photos.value = []
       return
     }
-    
-    // ✅ Удаляем фото из списка
+
     photos.value = photos.value.filter(photo => photo.id !== photoId)
-    
-    // ✅ Обновляем аватар если удалили главное фото
+
     const avatarPhoto = photos.value.find(p => p.is_avatar)
     if (avatarPhoto) {
       userStore.user.avatar = getPhotoUrl(avatarPhoto)
     } else {
       userStore.user.avatar = null
     }
-    
+
     await userStore.fetchUserInfo()
     toastStore.showToast(5000, 'Фото успешно удалено', 'bg-green-500/20')
     console.log('✅ Фото удалено, осталось:', photos.value.length)
   } catch (error) {
     console.error('❌ Delete photo error:', error)
-    console.error('❌ Статус ошибки:', error.response?.status)
-    console.error('❌ Данные ошибки:', error.response?.data)
-    
+
     if (error.response?.status === 401) {
       toastStore.showToast(5000, 'Сессия истекла, войдите заново', 'bg-red-500/20')
       userStore.removeToken()

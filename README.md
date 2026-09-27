@@ -1,10 +1,10 @@
-[![Typing SVG](https://readme-typing-svg.herokuapp.com?color=%2336BCF7&lines=quick+start )](https://git.io/typing-svg)
+[![Typing SVG](https://readme-typing-svg.herokuapp.com?color=%2336BCF7&lines=QUICK+START )](https://git.io/typing-svg)
 
 ## Документация по развертыванию  проекта для скрытия текста в картинку png
-## Стек: DRF + Celery + Redis + PostgreSQL + Docker + WebSocket + Nuxt
+## Стек: DRF + Celery + Redis + Flower + PostgreSQL + WebSocket + Nuxt + Docker + Nginx
 
 
-### C помощью docker
+### РАЗВЕРТЫВАНИЕ с помощью docker
 
 1. Клонируйте репозиторий
 
@@ -56,7 +56,7 @@
    - Swagger: http://localhost/api/v1/swagger/
    - Redoc: http://localhost/api/v1/redoc/
    
-### развертывание бекенда локально для разработки 
+### РАЗВЕРТЫВАНИЕ бекенда локально для разработки 
 
 1. Клонируйте репозиторий
 
@@ -101,7 +101,7 @@
    - Django: http://localhost:8000
 
 
-### развертывание фронтенд локально для разработки
+### РАЗВЕРТЫВАНИЕ фронтенд локально для разработки
 1. Перейдите в дирректорию  frontend/src  и создайте и активируйте виртальное окружение
     ```
     cd frontend/src
@@ -116,4 +116,4 @@
 ### После успешного запуска, приложение будет доступно по адресу:
    - Nuxt: http://localhost:3000
 
-#### В проекте реализована регистрация с помощью djoser, уведомления с кодом подтверждения celery, redis. Онлайн пользователей определяет webSscket, pinia используется для store nuxt, doker compose для запуска, nginx использует для прокси.
+#### Описание: В проекте реализована регистрация с помощью djoser и уведомления на email с кодом подтверждения выполняет celery, redis. Отслеживает задачи redis-comander, flower, а celery-bit можно использовать для выставления переодичности. Онлайн пользователей определяет websocket. Pinia используется для store в nuxt. Doker-compose для запуска, nginx выполняет роль прокси.
